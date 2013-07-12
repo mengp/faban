@@ -1,0 +1,82 @@
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.util.StringTokenizer;
+import java.util.logging.Logger; // debug only
+
+import com.sun.faban.driver.*;
+import com.sun.faban.driver.util.ContentSizeStats;
+import com.sun.faban.driver.util.Random;
+
+@BenchmarkDefinition@
+
+@BenchmarkDriver (
+ name  = "@BenchmarkDriverName@",
+ threadPerScale = 1 
+)
+
+@RequestLagTime@
+
+public class @DriverClassName@ {
+
+private HttpTransport httpTransport;
+private DriverContext ctx;
+private Random random;
+private ContentSizeStats contentStats = null;
+
+public @DriverClassName@(){
+     HttpTransport.setProvider("@ProviderClass@");
+	 httpTransport = HttpTransport.newInstance();
+	 ctx = DriverContext.getContext();
+     random = ctx.getRandom();
+     contentStats = new ContentSizeStats(ctx.getOperationCount());
+     ctx.attachMetrics(contentStats);
+}
+
+private static String doEncode(String s) {
+    StringTokenizer tok = new StringTokenizer(s, "&");
+    StringBuilder results = new StringBuilder();
+    boolean isFirst = true;
+    while (tok.hasMoreTokens()) {
+        StringTokenizer param = new StringTokenizer(tok.nextToken(), "=");
+	    String name = param.nextToken();
+	    String value = param.nextToken();
+	    if (!isFirst) {
+	        results.append("&");
+	    } else {
+	        isFirst = false;
+	    }
+	    try {
+	        results.append(URLEncoder.encode(name, "UTF-8"));
+	        results.append("=");
+	        results.append(URLEncoder.encode(value, "UTF-8"));
+	    } catch (UnsupportedEncodingException e) {
+	        e.printStackTrace();
+	    }
+    }
+    return results.toString();
+}
+
+#operation
+@Statics@
+@Operations@
+@RequestLagTime@
+public void @operationName@() throws Exception{
+
+	try{
+            String url = @url@;
+	 	@doKbps@
+	    @doTiming@
+            int bytesRead = httpTransport.readURL(url@postRequest@);
+            //System.out.println("url:"+url);
+
+	    @doTiming@
+            if (ctx.isTxSteadyState())
+                contentStats.sumContentSize[ctx.getOperationId()] += bytesRead;
+	}catch(Exception ex){
+	  ex.printStackTrace();
+          throw ex;
+	}
+
+}
+operation#
+}
