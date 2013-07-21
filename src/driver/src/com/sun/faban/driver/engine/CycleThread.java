@@ -26,20 +26,19 @@ package com.sun.faban.driver.engine;
 import java.lang.reflect.InvocationTargetException;
 import java.util.logging.Level;
 
-
 /**
- * A driver thread that controls the run by ramp up, steady state,
- * and ramp down cycles.
+ * A driver thread that controls the run by ramp up, steady state, and ramp down
+ * cycles.
  *
  * @author Akara Sucharitakul
  */
 public class CycleThread extends AgentThread {
 
     /**
-     * Allocates and initializes the timing structures which is specific
-     * to the pseudo-thread dimensions.
+     * Allocates and initializes the timing structures which is specific to the
+     * pseudo-thread dimensions.
      */
-	void initTimes() {
+    void initTimes() {
         delayTime = new long[1];
         startTime = new long[1];
         endTime = new long[1];
@@ -56,14 +55,14 @@ public class CycleThread extends AgentThread {
 
     /**
      * Each thread executes in the doRun method until the benchmark time is up
-     * The main loop chooses a tx. type according to the mix specified in
-     * the parameter file and calls the appropriate transaction
-     * method to do the job.
-   	 * The stats for the entire run are stored in a Metrics object
-   	 * which is returned to the Agent via the getResult() method.
+     * The main loop chooses a tx. type according to the mix specified in the
+     * parameter file and calls the appropriate transaction method to do the
+     * job. The stats for the entire run are stored in a Metrics object which is
+     * returned to the Agent via the getResult() method.
+     *
      * @see Metrics
      */
-	void doRun() {
+    void doRun() {
         driverContext = new DriverContext(this, timer);
 
         try {
@@ -74,8 +73,8 @@ public class CycleThread extends AgentThread {
                 t = cause;
                 cause = t.getCause();
             }
-            logger.log(Level.SEVERE, name +
-                    ": Error initializing driver object.", t);
+            logger.log(Level.SEVERE, name
+                    + ": Error initializing driver object.", t);
             agent.abortRun();
             return; // Terminate this thread immediately
         }
@@ -84,10 +83,10 @@ public class CycleThread extends AgentThread {
 
         // Notify the agent that we have started successfully.
         agent.threadStartLatch.countDown();
-        
+
         if (runInfo.simultaneousStart) {
-			waitStartTime();
-		}
+            waitStartTime();
+        }
 
         // Calculate cycle counts
         endRampUp = runInfo.rampUp;
@@ -107,8 +106,8 @@ public class CycleThread extends AgentThread {
             previousOperation[mixId] = currentOperation;
             BenchmarkDefinition.Operation previousOp = null;
             if (previousOperation[mixId] >= 0) {
-				previousOp = driverConfig.operations[currentOperation];
-			}
+                previousOp = driverConfig.operations[currentOperation];
+            }
 
             // Select the operation
             currentOperation = selector[0].select();
@@ -142,33 +141,35 @@ public class CycleThread extends AgentThread {
 
                 // The lastRespondTime may be set, though. if so, propagate
                 // it back to respondTime.
-                if (timingInfo.respondTime == TIME_NOT_SET &&
-                    timingInfo.lastRespondTime != TIME_NOT_SET) {
-                    logger.fine("Potential open request in operation " +
-                            op.m.getName() + ".");
-                    timingInfo.respondTime = timingInfo.lastRespondTime;
-                }
-
-                // If it never waited, we'll see whether we can just use the
-                // previous start and end times.
-                if (timingInfo.invokeTime == TIME_NOT_SET) {
-                    long currentTime = System.nanoTime();
-                    if (currentTime < timingInfo.intendedInvokeTime) {
-                        timingInfo.invokeTime = startTime[mixId];
-                        timingInfo.respondTime = endTime[mixId];
-                    } else {
-                        // Too late, we'll need to use the real time
-                        // for both invoke and respond time.
-                        timingInfo.invokeTime = System.nanoTime();
-                        timingInfo.respondTime = timingInfo.invokeTime;
-                        // The delay time is invalid,
-                        // we cannot record in this case.
+                if (timingInfo.responseInfoList.isEmpty()) {
+                    if (timingInfo.respondTime == TIME_NOT_SET
+                            && timingInfo.lastRespondTime != TIME_NOT_SET) {
+                        logger.fine("Potential open request in operation "
+                                + op.m.getName() + ".");
+                        timingInfo.respondTime = timingInfo.lastRespondTime;
                     }
-                } else if (timingInfo.respondTime == TIME_NOT_SET) {
-                    timingInfo.respondTime = timingInfo.invokeTime;
-                    metrics.recordDelayTime();
-                } else {
-                    metrics.recordDelayTime();
+
+                    // If it never waited, we'll see whether we can just use the
+                    // previous start and end times.
+                    if (timingInfo.invokeTime == TIME_NOT_SET) {
+                        long currentTime = System.nanoTime();
+                        if (currentTime < timingInfo.intendedInvokeTime) {
+                            timingInfo.invokeTime = startTime[mixId];
+                            timingInfo.respondTime = endTime[mixId];
+                        } else {
+                            // Too late, we'll need to use the real time
+                            // for both invoke and respond time.
+                            timingInfo.invokeTime = System.nanoTime();
+                            timingInfo.respondTime = timingInfo.invokeTime;
+                            // The delay time is invalid,
+                            // we cannot record in this case.
+                        }
+                    } else if (timingInfo.respondTime == TIME_NOT_SET) {
+                        timingInfo.respondTime = timingInfo.invokeTime;
+                        metrics.recordDelayTime();
+                    } else {
+                        metrics.recordDelayTime();
+                    }
                 }
             } catch (IllegalAccessException e) {
                 logger.log(Level.SEVERE, name + "." + op.m.getName() + ": "
@@ -177,36 +178,42 @@ public class CycleThread extends AgentThread {
                 return;
             }
 
-            startTime[mixId] = driverContext.timingInfo.invokeTime;
-            endTime[mixId] = driverContext.timingInfo.respondTime;
+            if (driverContext.timingInfo.responseInfoList.isEmpty()) {
+                startTime[mixId] = driverContext.timingInfo.invokeTime;
+                endTime[mixId] = driverContext.timingInfo.respondTime;
+            } else{
+                // Record startTime and endTime for responseList. 
+                startTime[mixId] = driverContext.timingInfo.responseInfoList.get(0).startTime;
+            }
 
             if (cycleCount > endRampDown) {
-				break driverLoop;
-			}
+                break driverLoop;
+            }
         }
         logger.fine(name + ": End of run.");
     }
 
     /**
      * Tests whether the last operation is in steady state or not. This is
-     * called through the context from the driver from within the operation
-     * so we need to be careful not to change run control parameters. This
-     * method only reads the stats.
+     * called through the context from the driver from within the operation so
+     * we need to be careful not to change run control parameters. This method
+     * only reads the stats.
+     *
      * @return True if the last operation is in steady state, false otherwise.
      */
-	boolean isSteadyState() {
+    boolean isSteadyState() {
         if (!startTimeSet) {
-			return false;
-		}
+            return false;
+        }
         // Copy out cycle count so we do not alternate it here.
         // Remember, this method is controlled by the user-implemented
         // driver through the context.
         int cycleCount = this.cycleCount;
         ++cycleCount;
         if (cycleCount > endRampUp && cycleCount <= endStdyState) {
-			return true;
-		}
-		return false;	
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -215,31 +222,31 @@ public class CycleThread extends AgentThread {
      * count. Otherwise time is used.
      *
      * @param start The start of a time span
-     * @param end   The end of a time span
+     * @param end The end of a time span
      * @return true if this time span is in steady state, false otherwise.
      */
-	boolean isSteadyState(long start, long end) {
+    boolean isSteadyState(long start, long end) {
         return isSteadyState();
     }
 
     /**
-     * Checks whether the last operation is in the ramp-up or ramp-down or
-     * not. Updates the inRamp parameter accordingly.
+     * Checks whether the last operation is in the ramp-up or ramp-down or not.
+     * Updates the inRamp parameter accordingly.
      */
-	void checkRamp() {
+    void checkRamp() {
         // Note: in cycle runs without simultaneous start, the startTimeSet
         // flag is only set once the start time has reached. Unlike time runs
         // without simultaneous starts where the startTimeSet is set to true
         // once the start time is actually set.
-        if (!runInfo.simultaneousStart && !startTimeSet &&
-                agent.timeSetLatch.getCount() == 0) {
+        if (!runInfo.simultaneousStart && !startTimeSet
+                && agent.timeSetLatch.getCount() == 0) {
             long invoke = driverContext.timingInfo.invokeTime;
             if (invoke >= agent.startTime) {
                 ++cycleCount; // Count this tx which started after bench start.
                 startTimeSet = true;
                 inRamp = true;
-            } else if (invoke == -1 &&
-                    System.nanoTime() >= agent.startTime) {
+            } else if (invoke == -1
+                    && System.nanoTime() >= agent.startTime) {
                 // We need to set the start time as time has come.
                 startTimeSet = true;
                 inRamp = true;
@@ -247,10 +254,10 @@ public class CycleThread extends AgentThread {
         } else if (startTimeSet) { // Cycle where start time set not counted.
             ++cycleCount;
             if (cycleCount > endRampUp && cycleCount <= endStdyState) {
-				inRamp = false;
-			} else {
-				inRamp = true;
-			}
+                inRamp = false;
+            } else {
+                inRamp = true;
+            }
         }
     }
 }

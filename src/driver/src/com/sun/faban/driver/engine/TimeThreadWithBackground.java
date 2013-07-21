@@ -26,25 +26,24 @@ package com.sun.faban.driver.engine;
 import java.lang.reflect.InvocationTargetException;
 import java.util.logging.Level;
 
-
 /**
- /**
-  * A driver thread that controls the run by ramp up, steady state,
-  * and ramp down times, and allows for a pseudo-background thread used
- * to simulate actions regularly taken by a fat client like timed operations.
- * 
-  * @author Akara Sucharitakul
-  */
+ * /**
+ * A driver thread that controls the run by ramp up, steady state, and ramp down
+ * times, and allows for a pseudo-background thread used to simulate actions
+ * regularly taken by a fat client like timed operations.
+ *
+ * @author Akara Sucharitakul
+ */
 public class TimeThreadWithBackground extends TimeThread {
 
     int[] mixOperation = new int[2]; // Per-mix index
 
     /**
-     *  Allocates and initializes the timing structures which is specific
-     *  to the pseudo-thread dimensions.
+     * Allocates and initializes the timing structures which is specific to the
+     * pseudo-thread dimensions.
      */
     @Override
-	void initTimes() {
+    void initTimes() {
         delayTime = new long[2];
         startTime = new long[2];
         endTime = new long[2];
@@ -65,23 +64,23 @@ public class TimeThreadWithBackground extends TimeThread {
 
     /**
      * Each thread executes in the doRun method until the benchmark time is up
-     * The main loop chooses a tx. type according to the mix specified in
-     * the parameter file and calls the appropriate transaction
-     * method to do the job.
-   	 * The stats for the entire run are stored in a Metrics object
-   	 * which is returned to the Agent via the getResult() method.
+     * The main loop chooses a tx. type according to the mix specified in the
+     * parameter file and calls the appropriate transaction method to do the
+     * job. The stats for the entire run are stored in a Metrics object which is
+     * returned to the Agent via the getResult() method.
+     *
      * @see Metrics
      */
     @Override
-	void doRun() {
+    void doRun() {
 
         driverContext = new DriverContext(this, timer);
 
         try {
             driver = driverClass.newInstance();
         } catch (Exception e) {
-            logger.log(Level.SEVERE, name +
-                    ": Error initializing driver object.", e);
+            logger.log(Level.SEVERE, name
+                    + ": Error initializing driver object.", e);
             agent.abortRun();
             return; // Terminate this thread immediately
         }
@@ -93,8 +92,8 @@ public class TimeThreadWithBackground extends TimeThread {
         agent.threadStartLatch.countDown();
 
         mixId = -1; // Since we run both fg and bg,
-                   // initially set it to -1 (not set)
-        
+        // initially set it to -1 (not set)
+
         selector = new Mix.Selector[2];
         selector[0] = driverConfig.mix[0].selector(random);
         selector[1] = driverConfig.mix[1].selector(random);
@@ -110,9 +109,9 @@ public class TimeThreadWithBackground extends TimeThread {
         }
 
         logger.fine(name + ": Start of run.");
-        
+
         // Next fg and bg operation
-        BenchmarkDefinition.Operation[] op = 
+        BenchmarkDefinition.Operation[] op =
                 new BenchmarkDefinition.Operation[2];
         // Next fg and bg time
         long[] invokeTime = new long[2];
@@ -123,9 +122,9 @@ public class TimeThreadWithBackground extends TimeThread {
 
             if (runInfo.variableLoad) {
                 if (id >= agent.runningThreads) {
-                    logger.log(Level.FINE, "Current load level: (" +
-                            agent.runningThreads + ") Thread " + id +
-                            " sleeping.");
+                    logger.log(Level.FINE, "Current load level: ("
+                            + agent.runningThreads + ") Thread " + id
+                            + " sleeping.");
                     timer.wakeupAt(agent.loadSwitchTime);
                     // Reset ops and don't record first cycle
                     mixOperation[0] = -1;
@@ -136,8 +135,8 @@ public class TimeThreadWithBackground extends TimeThread {
                 }
             }
 
-            if (!runInfo.simultaneousStart && !startTimeSet &&
-                    agent.timeSetLatch.getCount() == 0) {
+            if (!runInfo.simultaneousStart && !startTimeSet
+                    && agent.timeSetLatch.getCount() == 0) {
                 startTimeSet = true;
 
                 // Calculate time periods
@@ -215,46 +214,48 @@ public class TimeThreadWithBackground extends TimeThread {
 
                 // The lastRespondTime may be set, though. if so, propagate
                 // it back to respondTime.
-                if (timingInfo.respondTime == TIME_NOT_SET &&
-                        timingInfo.lastRespondTime != TIME_NOT_SET) {
-                    logger.fine("Potential open request in operation " +
-                            op[mixId].m.getName() + ".");
-                    timingInfo.respondTime = timingInfo.lastRespondTime;
-                }
-                // If it never waited, we'll see whether we can just use
-                // the previous start and end times.
-                if (timingInfo.invokeTime == TIME_NOT_SET) {
-                    long currentTime = System.nanoTime();
-                    if (currentTime < timingInfo.intendedInvokeTime) {
-                        // No time change, no need to checkRamp
+                if (timingInfo.responseInfoList.isEmpty()) {
+                    if (timingInfo.respondTime == TIME_NOT_SET
+                            && timingInfo.lastRespondTime != TIME_NOT_SET) {
+                        logger.fine("Potential open request in operation "
+                                + op[mixId].m.getName() + ".");
+                        timingInfo.respondTime = timingInfo.lastRespondTime;
+                    }
+                    // If it never waited, we'll see whether we can just use
+                    // the previous start and end times.
+                    if (timingInfo.invokeTime == TIME_NOT_SET) {
+                        long currentTime = System.nanoTime();
+                        if (currentTime < timingInfo.intendedInvokeTime) {
+                            // No time change, no need to checkRamp
+                            metrics.recordError();
+                            logError(cause, op[mixId]);
+                            continue driverLoop;
+                        }
+                        // Too late, we'll need to use the real time
+                        // for both invoke and respond time.
+                        timingInfo.invokeTime = System.nanoTime();
+                        timingInfo.respondTime = timingInfo.invokeTime;
+                        checkRamp();
                         metrics.recordError();
                         logError(cause, op[mixId]);
-                        continue driverLoop;
+                        // The delay time is invalid,
+                        // we cannot record in this case.
+                    } else if (timingInfo.respondTime == TIME_NOT_SET) {
+                        timingInfo.respondTime = System.nanoTime();
+                        checkRamp();
+                        metrics.recordError();
+                        logError(cause, op[mixId]);
+                        metrics.recordDelayTime();
+                    } else { // All times are there
+                        checkRamp();
+                        metrics.recordError();
+                        logError(cause, op[mixId]);
+                        metrics.recordDelayTime();
                     }
-                    // Too late, we'll need to use the real time
-                    // for both invoke and respond time.
-                    timingInfo.invokeTime = System.nanoTime();
-                    timingInfo.respondTime = timingInfo.invokeTime;
-                    checkRamp();
-                    metrics.recordError();
-                    logError(cause, op[mixId]);
-                    // The delay time is invalid,
-                    // we cannot record in this case.
-                } else if (timingInfo.respondTime == TIME_NOT_SET) {
-                    timingInfo.respondTime = System.nanoTime();
-                    checkRamp();
-                    metrics.recordError();
-                    logError(cause, op[mixId]);
-                    metrics.recordDelayTime();
-                } else { // All times are there
-                    checkRamp();
-                    metrics.recordError();
-                    logError(cause, op[mixId]);
-                    metrics.recordDelayTime();
                 }
             } catch (IllegalAccessException e) {
-                logger.log(Level.SEVERE, name + "." +
-                        op[mixId].m.getName() + ": " + e.getMessage(), e);
+                logger.log(Level.SEVERE, name + "."
+                        + op[mixId].m.getName() + ": " + e.getMessage(), e);
                 agent.abortRun();
                 return;
             }

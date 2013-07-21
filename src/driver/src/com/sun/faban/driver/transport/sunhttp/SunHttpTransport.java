@@ -21,13 +21,10 @@
  *
  * Copyright 2005-2009 Sun Microsystems Inc. All Rights Reserved
  */
+
 package com.sun.faban.driver.transport.sunhttp;
 
-import com.gargoylesoftware.htmlunit.WebClient;
-import com.gargoylesoftware.htmlunit.WebResponse;
-import com.gargoylesoftware.htmlunit.html.HtmlPage;
 import com.sun.faban.driver.HttpTransport;
-import com.sun.faban.driver.engine.DriverContext;
 
 import java.io.*;
 import java.net.HttpURLConnection;
@@ -42,23 +39,23 @@ import java.util.regex.Pattern;
  * using the HTTP and HTTPS protocols through the JDK's
  * java.net.HttpUrlConnection facility. The convention for the method names in
  * this class are as follows:<ul>
- * <li>Methods starting with "read..." read the data from the network. They
- * however DO NOT keep a copy of the data. The internal read buffer is recycled
- * immediately. These methods are useful for reading data for which the content
- * is irrelevant to the benchmark driver implementation. For example, tests
- * where the server send large chunks of binary data, i.e. images do not care
- * about the content. Using these methods will save both memory and cpu cycles
- * on the driver side.</li>
+ * <li>Methods starting with "read..." read the data from the network.
+ *     They however DO NOT keep a copy of the data. The internal read buffer
+ *     is recycled immediately. These methods are useful for reading data for
+ *     which the content is irrelevant to the benchmark driver implementation.
+ *     For example, tests where the server send large chunks of binary data,
+ *     i.e. images do not care about the content. Using these methods will save
+ *     both memory and cpu cycles on the driver side.</li>
  * <li>Methods starting with "fetch..." actually read and keep a copy of the
- * data for further analysis. These methods only work properly with text data as
- * the result is saved to a java.lang.StringBuilder.</li>
+ *     data for further analysis. These methods only work properly with text
+ *     data as the result is saved to a java.lang.StringBuilder.</li>
  * <li>Methods starting with "match.." internally fetch the data just like the
- * "fetch..." methods. In addition, they perform analysis on the data
- * received.</li>
+ *     "fetch..." methods. In addition, they perform analysis on the data
+ *     received.</li>
  * </ul>
- * Currenly, the SunHttpTransport class does not provide a way to keep binary
- * data for further analysis. This function can and will be added if there is a
- * use case for keeping such binary data.
+ * Currenly, the SunHttpTransport class does not provide a way to keep binary data
+ * for further analysis. This function can and will be added if there is a use
+ * case for keeping such binary data.
  *
  * @author Akara Sucharitakul
  */
@@ -71,65 +68,57 @@ public class SunHttpTransport extends HttpTransport {
     static {
         URL.setURLStreamHandlerFactory(new URLStreamHandlerFactory());
         java.net.CookieHandler.setDefault(new CookieHandler());
-        postHeadersForm = new HashMap<String, String>();
-        postHeadersForm.put("Content-Type", "application/x-www-form-urlencoded");
-        postHeadersBinary = new HashMap<String, String>();
-        postHeadersBinary.put("Content-Type", "application/octet-stream");
+	postHeadersForm = new HashMap<String, String>();
+	postHeadersForm.put("Content-Type", "application/x-www-form-urlencoded");
+	postHeadersBinary = new HashMap<String, String>();
+	postHeadersBinary.put("Content-Type", "application/octet-stream");
     }
-    /**
-     * The main appendable buffer for the total results.
-     */
+
+    /** The main appendable buffer for the total results. */
     private StringBuilder charBuffer;
-    /**
-     * The response code of the last response.
-     */
+
+    /** The response code of the last response. */
     private int responseCode;
-    /**
-     * The response headers of the last response.
-     */
+
+    /** The response headers of the last response. */
     private Map<String, List<String>> responseHeader;
-    /**
-     * The content size of the last read page.
-     */
+
+    /** The content size of the last read page. */
     private int contentSize;
-    /**
-     * The byte buffer used for the reads in read* methods.
-     */
+
+    /** The byte buffer used for the reads in read* methods. */
     private byte[] byteReadBuffer = new byte[BUFFER_SIZE];
-    /**
-     * The char used for the reads in fetch* methods.
-     */
+
+    /** The char used for the reads in fetch* methods. */
     private char[] charReadBuffer = new char[BUFFER_SIZE];
-    /**
-     * A cache for already-compiled regex patterns.
-     */
+
+    /** A cache for already-compiled regex patterns. */
     private HashMap<String, Pattern> patternCache;
-    /**
-     * Reference to the thread local cookie handler.
-     */
+
+    /** Reference to the thread local cookie handler. */
     private ThreadCookieHandler cookieHandler;
-    /**
-     * Default header when we do http posts, if no header is given.
-     */
+
+    /** Default header when we do http posts, if no header is given. */
     private HashMap<String, String> defaultPostHeader;
+
     private boolean followRedirects = false;
+
     private HashSet<String> texttypes;
 
     /**
      * Constructs a new SunHttpTransport object.
      */
     public SunHttpTransport() {
-        texttypes = new HashSet<String>();
+    	texttypes = new HashSet<String>();
         texttypes.add("application/json");
         cookieHandler = ThreadCookieHandler.newInstance();
     }
 
     /**
-     * Sets the http connections managed by this transport to follow or not
-     * follow HTTP redirects.
-     *
+     * Sets the http connections managed by this transport to follow or
+     * not follow HTTP redirects.
      * @param follow True if HTTP redirects should be automatically followed,
-     * false otherwise
+     *        false otherwise
      */
     public void setFollowRedirects(boolean follow) {
         followRedirects = follow;
@@ -142,35 +131,30 @@ public class SunHttpTransport extends HttpTransport {
      * @param texttype The content type of a HTTP response that contains text.
      */
     public void addTextType(String texttype) {
-        texttypes.add(texttype);
+    	texttypes.add(texttype);
     }
 
     /**
      * Checks whether the connections managed by this transport follows
      * redirects or not.
-     *
      * @return True if redirects are followed, false otherwise
      */
     public boolean isFollowRedirects() {
         return followRedirects;
     }
-
     /**
      * Initializes or re-initializes the buffer.
-     *
      * @param size The size of the buffer
      */
     private void reInitBuffer(int size) {
-        if (charBuffer == null) {
+        if (charBuffer == null)
             charBuffer = new StringBuilder(size);
-        } else {
+        else
             charBuffer.setLength(0);
-        }
     }
 
     /**
      * Obtains the reference of the current response buffer.
-     *
      * @return The response buffer
      */
     public StringBuilder getResponseBuffer() {
@@ -179,16 +163,15 @@ public class SunHttpTransport extends HttpTransport {
 
     /**
      * Reads data from the URL and discards it, keeping just the size of the
-     * total read. This is useful for ensuring receival of binary or text data
-     * that do not need further analysis.
-     *
+     * total read. This is useful for ensuring receival of binary or text
+     * data that do not need further analysis.
      * @param url The URL to read from
      * @param headers The request headers
      * @return The number of bytes read
      * @throws IOException
      */
     public int readURL(URL url,
-            Map<String, String> headers) throws IOException {
+                       Map<String, String> headers) throws IOException {
         HttpURLConnection huc = getConnection(url);
         setHeaders(huc, headers);
         responseCode = huc.getResponseCode();
@@ -198,9 +181,8 @@ public class SunHttpTransport extends HttpTransport {
 
     /**
      * Reads data from the URL and discards it, keeping just the size of the
-     * total read. This is useful for ensuring receival of binary or text data
-     * that do not need further analysis.
-     *
+     * total read. This is useful for ensuring receival of binary or text
+     * data that do not need further analysis.
      * @param url The URL to read from
      * @return The number of bytes read
      * @throws IOException
@@ -211,9 +193,8 @@ public class SunHttpTransport extends HttpTransport {
 
     /**
      * Reads data from the URL and discards it, keeping just the size of the
-     * total read. This is useful for ensuring receival of binary or text data
-     * that do not need further analysis.
-     *
+     * total read. This is useful for ensuring receival of binary or text
+     * data that do not need further analysis.
      * @param url The URL to read from
      * @param headers The request headers
      * @return The number of bytes read
@@ -226,9 +207,8 @@ public class SunHttpTransport extends HttpTransport {
 
     /**
      * Reads data from the URL and discards it, keeping just the size of the
-     * total read. This is useful for ensuring receival of binary or text data
-     * that do not need further analysis.
-     *
+     * total read. This is useful for ensuring receival of binary or text
+     * data that do not need further analysis.
      * @param url The URL to read from
      * @return The number of bytes read
      * @throws IOException
@@ -241,7 +221,6 @@ public class SunHttpTransport extends HttpTransport {
      * Makes a POST request to the URL. Reads data back and discards the data,
      * keeping just the size of the total read. This is useful for ensuring
      * receival of binary or text data that do not need further analysis.
-     *
      * @param url The URL to read from
      * @param postRequest The post request string
      * @return The number of bytes read
@@ -254,9 +233,8 @@ public class SunHttpTransport extends HttpTransport {
     /**
      * Makes a POST request to the URL. Reads data back and discards the data,
      * keeping just the size of the total read. This is useful for ensuring
-     * receival of binary or text data that do not need further analysis. Note
-     * that the POST request will be URL encoded.
-     *
+     * receival of binary or text data that do not need further analysis.
+     * Note that the POST request will be URL encoded.
      * @param url The URL to read from
      * @param postRequest The post request string
      * @param headers The request headers
@@ -268,9 +246,7 @@ public class SunHttpTransport extends HttpTransport {
         HttpURLConnection c = getConnection(url);
         if (headers != null) {
             checkContentType(headers);
-        } else {
-            headers = postHeadersForm;
-        }
+        } else headers = postHeadersForm;
         setHeaders(c, headers);
         postRequest(c, postRequest.getBytes("UTF-8"));
         responseCode = c.getResponseCode();
@@ -279,8 +255,8 @@ public class SunHttpTransport extends HttpTransport {
     }
 
     /**
-     * Makes a POST request to the URL without encoding the data (the header
-     * type is application/octet-stream).
+     * Makes a POST request to the URL without encoding the data (the
+     * header type is application/octet-stream).
      *
      * @param url The URL to read from
      * @param postRequest The binary data to send
@@ -292,10 +268,8 @@ public class SunHttpTransport extends HttpTransport {
             throws IOException {
         HttpURLConnection c = getConnection(url);
         if (headers != null) {
-            checkContentType(headers);
-        } else {
-            headers = postHeadersBinary;
-        }
+        	checkContentType(headers);
+        } else headers = postHeadersBinary;
         setHeaders(c, headers);
         postRequest(c, postRequest);
         responseCode = c.getResponseCode();
@@ -304,8 +278,8 @@ public class SunHttpTransport extends HttpTransport {
     }
 
     /**
-     * Makes a POST request to the URL without encoding the data (the header
-     * type is application/octet-stream).
+     * Makes a POST request to the URL without encoding the data (the
+     * header type is application/octet-stream).
      *
      * @param url The URL to read from
      * @param postRequest The binary data to send
@@ -325,7 +299,6 @@ public class SunHttpTransport extends HttpTransport {
     /**
      * Sets the request header. If there are multiple values for this header,
      * use a comma-separated list for the values.
-     *
      * @param c The connection
      * @param headers The request headers
      */
@@ -336,14 +309,14 @@ public class SunHttpTransport extends HttpTransport {
         } else if (!headers.containsKey("Accept-Language")) {
             headers.put("Accept-Language", "en-us,en;q=0.5");
         }
-        for (Map.Entry<String, String> entry : headers.entrySet()) {
+        for (Map.Entry<String, String> entry : headers.entrySet())
             c.setRequestProperty(entry.getKey(), entry.getValue());
-        }
     }
+
+
 
     /**
      * Makes a post request to the connection.
-     *
      * @param c The connection
      * @param request The request string
      * @throws IOException
@@ -385,16 +358,16 @@ public class SunHttpTransport extends HttpTransport {
      * @throws IOException
      */
     public int readURL(String url, String postRequest,
-            Map<String, String> headers) throws IOException {
+                       Map<String, String> headers) throws IOException {
         return readURL(new URL(url), postRequest, headers);
     }
 
     /**
-     * Reads data from the URL and returns the data read. Note that this method
-     * only works with text data as it does the byte-to-char conversion. This
-     * method will return null for responses with binary MIME types. The
-     * addTextType(String) method is used to register additional MIME types as
-     * text types.
+     * Reads data from the URL and returns the data read. Note that this
+     * method only works with text data as it does the byte-to-char
+     * conversion. This method will return null for responses with binary
+     * MIME types. The addTextType(String) method is used to register
+     * additional MIME types as text types.
      *
      * @param url The URL to read from
      * @param headers The request headers
@@ -411,11 +384,12 @@ public class SunHttpTransport extends HttpTransport {
     }
 
     /**
-     * Reads data from the URL and returns the data read. Note that this method
-     * only works with text data as it does the byte-to-char conversion. This
-     * method will return null for responses with binary MIME types. The
-     * addTextType(String) method is used to register additional MIME types as
-     * text types. Use getContentSize() to obtain the bytes of binary data read.
+     * Reads data from the URL and returns the data read. Note that this
+     * method only works with text data as it does the byte-to-char
+     * conversion. This method will return null for responses with binary
+     * MIME types. The addTextType(String) method is used to register
+     * additional MIME types as text types. Use getContentSize()
+     * to obtain the bytes of binary data read.
      *
      * @param url The URL to read from
      * @return The StringBuilder buffer containing the resulting document
@@ -429,72 +403,12 @@ public class SunHttpTransport extends HttpTransport {
     }
 
     /**
-     *
-     * @author: limp
-     */
-    public StringBuilder fetchURLWithJS(URL url)
-            throws IOException {
-        DriverContext ctx = DriverContext.getContext();
-        WebClient webClient = new WebClient();
-        List<WebResponse> responses = webClient.getPageResponseList(url);
-        //HtmlPage page = webClient.getPage(url);
-        //page.get
-        Iterator<WebResponse> it = responses.iterator();
-        while (it.hasNext()) {
-            WebResponse response = it.next();
-            ctx.recordResponseInfo(response.getStartTime(), response.getEndTime(),
-                    response.getWebRequest().getUrl().toExternalForm());
-        }
-
-
-        return fetchURL(url, (Map<String, String>) null);
-    }
-
-    public StringBuilder fetchResponse(WebResponse response)
-            throws IOException {
-        responseCode = response.getStatusCode();
-        // response.
-        //responseHeader = connection.getHeaderFields();
-        String contentType = response.getContentType();
-        String hdr = "charset=";
-        int hdrLen = hdr.length();
-        String encoding = "ISO-8859-1";
-        if (contentType != null) {
-            StringTokenizer t = new StringTokenizer(contentType, ";");
-            contentType = t.nextToken().trim();
-            while (t.hasMoreTokens()) {
-                String param = t.nextToken().trim();
-                if (param.startsWith(hdr)) {
-                    encoding = param.substring(hdrLen);
-                    break;
-                }
-            }
-        }
-        if (contentType != null && (contentType.startsWith("text/")
-                || texttypes.contains(contentType))) {
-            InputStream is = response.getContentAsStream();
-            Reader reader = new InputStreamReader(is, encoding);
-
-            // We have to close the input stream in order to return it to
-            // the cache, so we get it for all content, even if we don't
-            // use it. It's (I believe) a bug that the content handlers used
-            // by getContent() don't close the input stream, but the JDK team
-            // has marked those bugs as "will not fix."
-            fetchResponseData(reader);
-            reader.close();
-            return charBuffer;
-        }
-
-        //readResponse(connection);
-        return null;
-    }
-
-    /**
-     * Reads data from the URL and returns the data read. Note that this method
-     * only works with text data as it does the byte-to-char conversion. This
-     * method will return null for responses with binary MIME types. The
-     * addTextType(String) method is used to register additional MIME types as
-     * text types. Use getContentSize() to obtain the bytes of binary data read.
+     * Reads data from the URL and returns the data read. Note that this
+     * method only works with text data as it does the byte-to-char
+     * conversion. This method will return null for responses with binary
+     * MIME types. The addTextType(String) method is used to register
+     * additional MIME types as text types. Use getContentSize()
+     * to obtain the bytes of binary data read.
      *
      * @param url The URL to read from
      * @param headers The request headers
@@ -509,11 +423,12 @@ public class SunHttpTransport extends HttpTransport {
     }
 
     /**
-     * Reads data from the URL and returns the data read. Note that this method
-     * only works with text data as it does the byte-to-char conversion. This
-     * method will return null for responses with binary MIME types. The
-     * addTextType(String) method is used to register additional MIME types as
-     * text types. Use getContentSize() to obtain the bytes of binary data read.
+     * Reads data from the URL and returns the data read. Note that this
+     * method only works with text data as it does the byte-to-char
+     * conversion. This method will return null for responses with binary
+     * MIME types. The addTextType(String) method is used to register
+     * additional MIME types as text types. Use getContentSize()
+     * to obtain the bytes of binary data read.
      *
      * @param url The URL to read from
      * @return The StringBuilder buffer containing the resulting document
@@ -525,15 +440,11 @@ public class SunHttpTransport extends HttpTransport {
         return fetchURL(new URL(url));
     }
 
-    public StringBuilder fetchURLWithJS(String url) throws IOException {
-        return fetchURLWithJS(new URL(url));
-    }
-
     /**
      * Retrieve large response from the URL and returns the data read. Use this
-     * method for any arbitrary return data type e.g. file downloads. This
-     * method will only download upto 1 MB to conserve memory. However, it will
-     * read all of the response and update contentSize appropriately.
+     * method for any arbitrary return data type e.g. file downloads. This method will only
+     * download upto 1 MB to conserve memory. However, it will read all of the response and
+     * update contentSize appropriately.
      *
      * @param url The URL to read from
      * @return The byte array containing the resulting data
@@ -561,19 +472,18 @@ public class SunHttpTransport extends HttpTransport {
             }
             is.close();
             contentSize = totalLength;
-            return (Arrays.copyOf(buffer, bufferLen));
-        } else {
+            return(Arrays.copyOf(buffer, bufferLen));
+        } else
             return null;
-        }
     }
 
     /**
      * Makes a POST request to the URL. Reads data back and returns the data
      * read. Note that this method only works with text data as it does the
-     * byte-to-char conversion. This method will return null for responses with
-     * binary MIME types. The addTextType(String) method is used to register
-     * additional MIME types as text types. Use getContentSize() to obtain the
-     * bytes of binary data read.
+     * byte-to-char conversion. This method will return null for responses
+     * with binary MIME types. The addTextType(String) method is used to
+     * register additional MIME types as text types. Use getContentSize()
+     * to obtain the bytes of binary data read.
      *
      * @param url The URL to read from
      * @param postRequest The post request string
@@ -590,10 +500,10 @@ public class SunHttpTransport extends HttpTransport {
     /**
      * Makes a POST request to the URL. Reads data back and returns the data
      * read. Note that this method only works with text data as it does the
-     * byte-to-char conversion. This method will return null for responses with
-     * binary MIME types. The addTextType(String) method is used to register
-     * additional MIME types as text types. Use getContentSize() to obtain the
-     * bytes of binary data read.
+     * byte-to-char conversion. This method will return null for responses
+     * with binary MIME types. The addTextType(String) method is used to
+     * register additional MIME types as text types. Use getContentSize()
+     * to obtain the bytes of binary data read.
      *
      * @param url The URL to read from
      * @param postRequest The post request string
@@ -604,7 +514,7 @@ public class SunHttpTransport extends HttpTransport {
      * @see #getContentSize()
      */
     public StringBuilder fetchURL(String url, String postRequest,
-            Map<String, String> headers)
+                                  Map<String, String> headers)
             throws IOException {
         return fetchURL(new URL(url), postRequest, headers);
     }
@@ -612,10 +522,10 @@ public class SunHttpTransport extends HttpTransport {
     /**
      * Makes a POST request to the URL. Reads data back and returns the data
      * read. Note that this method only works with text data as it does the
-     * byte-to-char conversion. This method will return null for responses with
-     * binary MIME types. The addTextType(String) method is used to register
-     * additional MIME types as text types. Use getContentSize() to obtain the
-     * bytes of binary data read.
+     * byte-to-char conversion. This method will return null for responses
+     * with binary MIME types. The addTextType(String) method is used to
+     * register additional MIME types as text types. Use getContentSize()
+     * to obtain the bytes of binary data read.
      *
      * @param url The URL to read from
      * @param postRequest The post request string
@@ -626,7 +536,7 @@ public class SunHttpTransport extends HttpTransport {
      * @see #getContentSize()
      */
     public StringBuilder fetchURL(URL url, String postRequest,
-            Map<String, String> headers)
+                                  Map<String, String> headers)
             throws IOException {
         String postHeader = "Content-Type";
         String postHeaderValue = "application/x-www-form-urlencoded";
@@ -638,9 +548,8 @@ public class SunHttpTransport extends HttpTransport {
             headers = defaultPostHeader;
         } else {
             String type = headers.get(postHeader);
-            if (type == null) {
+            if (type == null)
                 headers.put(postHeader, postHeaderValue);
-            }
         }
         HttpURLConnection c = getConnection(url);
         setHeaders(c, headers);
@@ -651,10 +560,10 @@ public class SunHttpTransport extends HttpTransport {
     /**
      * Makes a POST request to the URL. Reads data back and returns the data
      * read. Note that this method only works with text data as it does the
-     * byte-to-char conversion. This method will return null for responses with
-     * binary MIME types. The addTextType(String) method is used to register
-     * additional MIME types as text types. Use getContentSize() to obtain the
-     * bytes of binary data read.
+     * byte-to-char conversion. This method will return null for responses
+     * with binary MIME types. The addTextType(String) method is used to
+     * register additional MIME types as text types. Use getContentSize()
+     * to obtain the bytes of binary data read.
      *
      * @param url The URL to read from
      * @param postRequest The post request string
@@ -677,26 +586,27 @@ public class SunHttpTransport extends HttpTransport {
      * @return The buffer of the main page
      * @throws IOException If an I/O error occurred
      *
-     public StringBuilder fetchPage(URL page, URL[] images) throws IOException {
-     // TODO: implement method
-     return null;
-     }
-     */
+	public StringBuilder fetchPage(URL page, URL[] images) throws IOException {
+        // TODO: implement method
+        return null;
+    }
+    */
 
     /*
      * Fetch page and images in the same call. Currently not used.
      *
-     public StringBuilder fetchPage(String page, String[] images)
-     throws IOException {
-     URL[] imgURLs = new URL[images.length];
-     for (int i = 0; i < imgURLs.length; i++)
-     imgURLs[i] = new URL(images[i]);
-     return fetchPage(new URL(page), imgURLs);
-     }
-     */
+    public StringBuilder fetchPage(String page, String[] images)
+            throws IOException {
+        URL[] imgURLs = new URL[images.length];
+        for (int i = 0; i < imgURLs.length; i++)
+            imgURLs[i] = new URL(images[i]);
+        return fetchPage(new URL(page), imgURLs);
+    }
+    */
+
     /**
-     * Method not implemented. Makes a POST request. Fetches the main page and
-     * all other image or resource pages based on the given URLs.
+     * Method not implemented. Makes a POST request. Fetches the main page
+     * and all other image or resource pages based on the given URLs.
      *
      * @param page The page URL
      * @param images The image or other resource URLs to fetch with page
@@ -704,7 +614,7 @@ public class SunHttpTransport extends HttpTransport {
      * @return The buffer of the main page
      * @throws IOException If an I/O error occurred
      */
-    public StringBuilder fetchURL(URL page, URL[] images, String postRequest)
+	public StringBuilder fetchURL(URL page, URL[] images, String postRequest)
             throws IOException {
         // TODO: implement method
         return null;
@@ -721,20 +631,18 @@ public class SunHttpTransport extends HttpTransport {
      * @throws IOException If an I/O error occurred
      */
     public StringBuilder fetchPage(String page, String[] images,
-            String postRequest) throws IOException {
+                                  String postRequest) throws IOException {
         URL[] imgURLs = new URL[images.length];
-        for (int i = 0; i < imgURLs.length; i++) {
+        for (int i = 0; i < imgURLs.length; i++)
             imgURLs[i] = new URL(images[i]);
-        }
         return fetchURL(new URL(page), imgURLs, postRequest);
     }
 
     /**
-     * Fetches http response data from an already established connection. If the
-     * response data is binary, null is returned. Use getContentSize() for the
-     * bytes read in this case. The addTextType(String) method is used to
-     * register additional MIME types as text types.
-     *
+     * Fetches http response data from an already established connection.
+     * If the response data is binary, null is returned. Use getContentSize()
+     * for the bytes read in this case. The addTextType(String) method is
+     * used to register additional MIME types as text types.
      * @param connection The connection to fetch from
      * @return The StringBuilder buffer containing the resulting document
      * @throws IOException
@@ -760,8 +668,8 @@ public class SunHttpTransport extends HttpTransport {
                 }
             }
         }
-        if (contentType != null && (contentType.startsWith("text/")
-                || texttypes.contains(contentType))) {
+        if (contentType != null && (contentType.startsWith("text/") ||
+                                    texttypes.contains(contentType))) {
             InputStream is = connection.getInputStream();
             Reader reader = new InputStreamReader(is, encoding);
 
@@ -783,7 +691,6 @@ public class SunHttpTransport extends HttpTransport {
      * Reads the http response from a connection, counts the size of the
      * resulting document, and discards the data. This method recycles its
      * buffer during large reads and therefore has very little weight.
-     *
      * @param connection The connection to read from
      * @return The number of bytes read
      * @throws IOException
@@ -791,10 +698,10 @@ public class SunHttpTransport extends HttpTransport {
     private int readResponse(HttpURLConnection connection) throws IOException {
         InputStream is = connection.getInputStream();
         /*
-         Map<String, List<String>> m = connection.getHeaderFields();
-         addCookies(m.get("Set-cookie"));
-         addCookies(m.get("Set-Cookie"));
-         */
+        Map<String, List<String>> m = connection.getHeaderFields();
+        addCookies(m.get("Set-cookie"));
+        addCookies(m.get("Set-Cookie"));
+        */
         int totalLength = 0;
         int length = is.read(byteReadBuffer);
         while (length != -1) {
@@ -807,10 +714,9 @@ public class SunHttpTransport extends HttpTransport {
 
     /**
      * Obtains the size of the last read page or resource. The result is in
-     * bytes for non-decoded content and in characters for decoded content. All
-     * binary content is not decoded. Text content is decoded only using the
-     * fetch or match commands.
-     *
+     * bytes for non-decoded content and in characters for decoded content.
+     * All binary content is not decoded. Text content is decoded only using
+     * the fetch or match commands.
      * @return The size, in bytes, of the last page read
      */
     public int getContentSize() {
@@ -818,9 +724,8 @@ public class SunHttpTransport extends HttpTransport {
     }
 
     /**
-     * Fetches the data from the stream, converts to char, and returns it as a
-     * StringBuilder.
-     *
+     * Fetches the data from the stream, converts to char, and returns it as
+     * a StringBuilder.
      * @param stream The stream to read from
      * @return The resulting data
      * @throws IOException
@@ -832,7 +737,6 @@ public class SunHttpTransport extends HttpTransport {
 
     /**
      * Fetches the data from the reader and returns it as a StringBuilder.
-     *
      * @param reader The reader to read from
      * @return The resulting data
      * @throws IOException
@@ -840,11 +744,10 @@ public class SunHttpTransport extends HttpTransport {
     public StringBuilder fetchResponseData(Reader reader) throws IOException {
         int totalLength = 0;
         int length = reader.read(charReadBuffer, 0, charReadBuffer.length);
-        if (length > 0) {
+        if (length > 0)
             reInitBuffer(length);
-        } else {
+        else
             reInitBuffer(2048);
-        }
 
         while (length != -1) {
             totalLength += length;
@@ -857,14 +760,12 @@ public class SunHttpTransport extends HttpTransport {
 
     /**
      * Maches the regular expression against the data in the current buffer.
-     *
      * @param regex The regular expression to match
      * @return True if the match succeeds, false otherwise
      */
     public boolean matchResponse(String regex) {
-        if (patternCache == null) {
+        if (patternCache == null)
             patternCache = new HashMap<String, Pattern>();
-        }
         Pattern pattern = patternCache.get(regex);
         if (pattern == null) {
             pattern = Pattern.compile(regex);
@@ -876,7 +777,6 @@ public class SunHttpTransport extends HttpTransport {
 
     /**
      * Matches the regular expression against the data read from the connection.
-     *
      * @param connection The source of the data
      * @param regex The regular expression to match
      * @param headers The request headers
@@ -884,7 +784,7 @@ public class SunHttpTransport extends HttpTransport {
      * @throws IOException
      */
     public boolean matchResponse(URLConnection connection, String regex,
-            Map<String, String> headers)
+                                 Map<String, String> headers)
             throws IOException {
         setHeaders(connection, headers);
         if (fetchResponse((HttpURLConnection) connection) != null) {
@@ -895,7 +795,6 @@ public class SunHttpTransport extends HttpTransport {
 
     /**
      * Matches the regular expression against the data read from the stream.
-     *
      * @param stream The source of the data
      * @param regex The regular expression to match
      * @return True if the match succeeds, false otherwise
@@ -909,7 +808,6 @@ public class SunHttpTransport extends HttpTransport {
 
     /**
      * Matches the regular expression against the data read from the reader.
-     *
      * @param reader The source of the data
      * @param regex The regular expression to match
      * @return True if the match succeeds, false otherwise
@@ -922,8 +820,8 @@ public class SunHttpTransport extends HttpTransport {
     }
 
     /**
-     * Matches the regular expression against the response fetched from the URL.
-     *
+     * Matches the regular expression against the response fetched from the
+     * URL.
      * @param url The source of the data
      * @param regex THe regular expression to match
      * @return True if the match succeeds, false otherwise
@@ -935,8 +833,8 @@ public class SunHttpTransport extends HttpTransport {
     }
 
     /**
-     * Matches the regular expression against the response fetched from the URL.
-     *
+     * Matches the regular expression against the response fetched from the
+     * URL.
      * @param url The source of the data
      * @param regex The regular expression to match
      * @param headers The request headers
@@ -950,8 +848,8 @@ public class SunHttpTransport extends HttpTransport {
     }
 
     /**
-     * Matches the regular expression against the response fetched from the URL.
-     *
+     * Matches the regular expression against the response fetched from the
+     * URL.
      * @param url The source of the data
      * @param regex The regular expression to match
      * @return True if the match succeeds, false otherwise
@@ -963,8 +861,8 @@ public class SunHttpTransport extends HttpTransport {
     }
 
     /**
-     * Matches the regular expression against the response fetched from the URL.
-     *
+     * Matches the regular expression against the response fetched from the
+     * URL.
      * @param url The source of the data
      * @param regex The regular expression to match
      * @param headers The request headers
@@ -978,9 +876,8 @@ public class SunHttpTransport extends HttpTransport {
     }
 
     /**
-     * Mathces the regular expression against the response fetched from the post
-     * request made to the URL.
-     *
+     * Mathces the regular expression against the response fetched from the
+     * post request made to the URL.
      * @param url The source of the data
      * @param postRequest The post request string
      * @param regex The regular expression to match
@@ -994,9 +891,8 @@ public class SunHttpTransport extends HttpTransport {
     }
 
     /**
-     * Mathces the regular expression against the response fetched from the post
-     * request made to the URL.
-     *
+     * Mathces the regular expression against the response fetched from the
+     * post request made to the URL.
      * @param url The source of the data
      * @param postRequest The post request string
      * @param regex The regular expression to match
@@ -1005,15 +901,14 @@ public class SunHttpTransport extends HttpTransport {
      * @throws IOException
      */
     public boolean matchURL(URL url, String postRequest, String regex,
-            Map<String, String> headers) throws IOException {
+                            Map<String, String> headers) throws IOException {
         fetchURL(url, postRequest, headers);
         return matchResponse(regex);
     }
 
     /**
-     * Mathces the regular expression against the response fetched from the post
-     * request made to the URL.
-     *
+     * Mathces the regular expression against the response fetched from the
+     * post request made to the URL.
      * @param url The source of the data
      * @param postRequest The post request string
      * @param regex The regular expression to match
@@ -1026,9 +921,8 @@ public class SunHttpTransport extends HttpTransport {
     }
 
     /**
-     * Mathces the regular expression against the response fetched from the post
-     * request made to the URL.
-     *
+     * Mathces the regular expression against the response fetched from the
+     * post request made to the URL.
      * @param url The source of the data
      * @param postRequest The post request string
      * @param regex The regular expression to match
@@ -1037,14 +931,13 @@ public class SunHttpTransport extends HttpTransport {
      * @throws IOException
      */
     public boolean matchURL(String url, String postRequest, String regex,
-            Map<String, String> headers) throws IOException {
+                            Map<String, String> headers) throws IOException {
         fetchURL(url, postRequest, headers);
         return matchResponse(regex);
     }
 
     /**
      * Obtains the list of cookie values by the name of the cookies.
-     *
      * @param name The cookie name
      * @return An array of non-duplicating cookie values.
      */
@@ -1054,7 +947,6 @@ public class SunHttpTransport extends HttpTransport {
 
     /**
      * Obtains the header fields of the last request's response.
-     *
      * @param name The response header field of interest
      * @return An array of response header values
      */
@@ -1065,8 +957,8 @@ public class SunHttpTransport extends HttpTransport {
     }
 
     /**
-     * Utility class to get responseHeaders as a string. The formatting is not
-     * localized
+     * Utility class to get responseHeaders as a string.  The formatting is
+     * not localized
      *
      * @return responseHeaders
      */
@@ -1091,20 +983,17 @@ public class SunHttpTransport extends HttpTransport {
 
     /**
      * Obtains the response code of the previous request.
-     *
      * @return responseCode The response code
      */
     public int getResponseCode() {
         return responseCode;
     }
 
-    private void checkContentType(Map<String, String> headers) throws IOException {
-        String type = headers.get("Content-type");
-        if (type == null) {
-            type = headers.get("Content-Type");
-        }
-        if (type == null) {
-            headers.put("Content-Type", "application/x-www-form-urlencoded");
-        }
-    }
+	private void checkContentType(Map<String, String> headers) throws IOException {
+		String type = headers.get("Content-type");
+		if (type == null)
+			type = headers.get("Content-Type");
+		if (type == null)
+		    headers.put("Content-Type", "application/x-www-form-urlencoded");
+	}
 }

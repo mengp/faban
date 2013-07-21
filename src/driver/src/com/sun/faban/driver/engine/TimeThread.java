@@ -28,20 +28,19 @@ import com.sun.faban.driver.FatalException;
 import java.lang.reflect.InvocationTargetException;
 import java.util.logging.Level;
 
-
 /**
- * A driver thread that controls the run by ramp up, steady state,
- * and ramp down times.
+ * A driver thread that controls the run by ramp up, steady state, and ramp down
+ * times.
  *
  * @author Akara Sucharitakul
  */
 public class TimeThread extends AgentThread {
 
     /**
-     * Allocates and initializes the timing structures which is specific
-     * to the pseudo-thread dimensions.
+     * Allocates and initializes the timing structures which is specific to the
+     * pseudo-thread dimensions.
      */
-	void initTimes() {
+    void initTimes() {
         delayTime = new long[1];
         startTime = new long[1];
         endTime = new long[1];
@@ -58,14 +57,14 @@ public class TimeThread extends AgentThread {
 
     /**
      * Each thread executes in the doRun method until the benchmark time is up
-     * The main loop chooses a tx. type according to the mix specified in
-     * the parameter file and calls the appropriate transaction
-     * method to do the job.
-   	 * The stats for the entire run are stored in a Metrics object
-   	 * which is returned to the Agent via the getResult() method.
+     * The main loop chooses a tx. type according to the mix specified in the
+     * parameter file and calls the appropriate transaction method to do the
+     * job. The stats for the entire run are stored in a Metrics object which is
+     * returned to the Agent via the getResult() method.
+     *
      * @see Metrics
      */
-	void doRun() {
+    void doRun() {
 
         driverContext = new DriverContext(this, timer);
 
@@ -77,8 +76,8 @@ public class TimeThread extends AgentThread {
                 t = cause;
                 cause = t.getCause();
             }
-            logger.log(Level.SEVERE, name +
-                    ": Error initializing driver object.", t);
+            logger.log(Level.SEVERE, name
+                    + ": Error initializing driver object.", t);
             agent.abortRun();
             return; // Terminate this thread immediately
         }
@@ -110,9 +109,9 @@ public class TimeThread extends AgentThread {
 
             if (runInfo.variableLoad) {
                 if (id >= agent.runningThreads) {
-                    logger.log(Level.FINE, "Current load level: (" +
-                            agent.runningThreads + ") Thread " + id +
-                            " sleeping.");
+                    logger.log(Level.FINE, "Current load level: ("
+                            + agent.runningThreads + ") Thread " + id
+                            + " sleeping.");
                     timer.wakeupAt(agent.loadSwitchTime);
                     // Reset ops and don't record first cycle
                     currentOperation = -1;
@@ -121,8 +120,8 @@ public class TimeThread extends AgentThread {
                 }
             }
 
-            if (!runInfo.simultaneousStart && !startTimeSet &&
-                    agent.timeSetLatch.getCount() == 0) {
+            if (!runInfo.simultaneousStart && !startTimeSet
+                    && agent.timeSetLatch.getCount() == 0) {
                 startTimeSet = true;
 
                 // Calculate time periods
@@ -155,34 +154,42 @@ public class TimeThread extends AgentThread {
                 break driverLoop;
             }
 
-            logger.finest(name + ": Invoking " + op.name + " at time " +
-                    invokeTime + ". Ramp down ends at time " +
-                    endRampDown + '.');
+            logger.finest(name + ": Invoking " + op.name + " at time "
+                    + invokeTime + ". Ramp down ends at time "
+                    + endRampDown + '.');
 
             driverContext.setInvokeTime(invokeTime);
 
             // Invoke the operation
             try {
-                if (id == 0)
-                    logger.finest("Invoking " + op.name + " at " +
-                            System.nanoTime());
+                if (id == 0) {
+                    logger.finest("Invoking " + op.name + " at "
+                            + System.nanoTime());
+                }
                 op.m.invoke(driver);
-                if (id == 0)
-                    logger.finest("Returned from " + op.name + " (OK) at " +
-                            System.nanoTime());
+                if (id == 0) {
+                    logger.finest("Returned from " + op.name + " (OK) at "
+                            + System.nanoTime());
+                }
                 validateTimeCompletion(op);
                 if (id == 0) {
+
                     DriverContext.TimingInfo t = driverContext.timingInfo;
-                    logger.finest("Invoke: " + t.invokeTime + ", Respond: " +
-                            t.respondTime + ", Pause: " + t.pauseTime);
+                    if (t.responseInfoList.isEmpty()) {
+                        logger.finest("Invoke: " + t.invokeTime + ", Respond: "
+                                + t.respondTime + ", Pause: " + t.pauseTime);
+                    } else {
+                        
+                    }
                 }
                 checkRamp();
                 metrics.recordTx();
                 metrics.recordDelayTime();
             } catch (InvocationTargetException e) {
-                if (id == 0)
-                    logger.finest("Returned from " + op.name + " (Err) at " +
-                            System.nanoTime());
+                if (id == 0) {
+                    logger.finest("Returned from " + op.name + " (Err) at "
+                            + System.nanoTime());
+                }
                 // An invocation target exception is caused by another
                 // exception thrown by the operation directly.
                 Throwable cause = e.getCause();
@@ -198,10 +205,10 @@ public class TimeThread extends AgentThread {
 
                 // The lastRespondTime may be set, though. if so, propagate
                 // it back to respondTime.
-                if (timingInfo.respondTime == TIME_NOT_SET &&
-                        timingInfo.lastRespondTime != TIME_NOT_SET) {
-                    logger.fine("Potential open request in operation " +
-                            op.m.getName() + ".");
+                if (timingInfo.respondTime == TIME_NOT_SET
+                        && timingInfo.lastRespondTime != TIME_NOT_SET) {
+                    logger.fine("Potential open request in operation "
+                            + op.m.getName() + ".");
                     timingInfo.respondTime = timingInfo.lastRespondTime;
                 }
 
@@ -237,8 +244,8 @@ public class TimeThread extends AgentThread {
                     metrics.recordDelayTime();
                 }
             } catch (IllegalAccessException e) {
-                logger.log(Level.SEVERE, name + "." + op.m.getName() +
-                        ": " + e.getMessage(), e);
+                logger.log(Level.SEVERE, name + "." + op.m.getName()
+                        + ": " + e.getMessage(), e);
                 agent.abortRun();
                 return;
             }
@@ -254,21 +261,22 @@ public class TimeThread extends AgentThread {
     }
 
     /**
-     * Checks whether the last operation is in the ramp-up or ramp-down or
-     * not. Updates the inRamp parameter accordingly.
+     * Checks whether the last operation is in the ramp-up or ramp-down or not.
+     * Updates the inRamp parameter accordingly.
      */
-	void checkRamp() {
+    void checkRamp() {
         inRamp = !isSteadyState(driverContext.timingInfo.invokeTime,
-                                driverContext.timingInfo.respondTime);
+                driverContext.timingInfo.respondTime);
     }
 
     /**
      * Tests whether the last operation is in steady state or not. This is
      * called by the driver from within the operation so we need to be careful
      * not to change run control parameters. This method only reads the stats.
+     *
      * @return True if the last operation is in steady state, false otherwise.
      */
-	boolean isSteadyState() {
+    boolean isSteadyState() {
         // The lastRespondTime may be set, though. if so, propagate
         // it back to respondTime.
         long respondTime = driverContext.timingInfo.respondTime;
@@ -277,11 +285,11 @@ public class TimeThread extends AgentThread {
                 logger.fine("Potential pending open request.");
                 respondTime = driverContext.timingInfo.lastRespondTime;
             } else {
-			    throw new FatalException("isTxSteadyState called before " +
-                      "response time capture. Cannot determine tx in steady" +
-                      " state or not. This is a bug in the driver code.");
+                throw new FatalException("isTxSteadyState called before "
+                        + "response time capture. Cannot determine tx in steady"
+                        + " state or not. This is a bug in the driver code.");
             }
-		}
+        }
 
         return isSteadyState(driverContext.timingInfo.invokeTime, respondTime);
     }
@@ -292,10 +300,10 @@ public class TimeThread extends AgentThread {
      * count. Otherwise time is used.
      *
      * @param start The start of a time span
-     * @param end   The end of a time span
+     * @param end The end of a time span
      * @return true if this time span is in steady state, false otherwise.
      */
-	boolean isSteadyState(long start, long end) {
+    boolean isSteadyState(long start, long end) {
         return startTimeSet && start >= endRampUp && end < endStdyState;
     }
 }

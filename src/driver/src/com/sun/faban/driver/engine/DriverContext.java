@@ -39,6 +39,7 @@ import javax.xml.xpath.XPath;
 import javax.xml.xpath.XPathExpressionException;
 import javax.xml.xpath.XPathFactory;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -445,6 +446,8 @@ public class DriverContext extends com.sun.faban.driver.DriverContext {
      * @throws IllegalStateException if the operation uses auto timing
      */
     public void recordTime() {
+        timingInfo.responseInfoList.clear();
+        
         if (agentThread.currentOperation == -1) {
             throw new IllegalStateException("DriverContext.recordTime called "
                     + "outside an operation");
@@ -611,6 +614,7 @@ public class DriverContext extends com.sun.faban.driver.DriverContext {
      * @return The recorded time - system nanotime, or TIME_NOT_SET if not set
      */
     public long recordStartTime() {
+         timingInfo.responseInfoList.clear();
         // Not in an operation, don't record time.
         if (agentThread.currentOperation == -1) {
             return TIME_NOT_SET;
@@ -658,6 +662,8 @@ public class DriverContext extends com.sun.faban.driver.DriverContext {
      * @return The recorded time - system nanotime, or TIME_NOT_SET if not set
      */
     public long recordEndTime() {
+         timingInfo.responseInfoList.clear();
+         
         long tstamp = TIME_NOT_SET;
         // Not in an operation, don't record time.
         if (agentThread.currentOperation != -1) {
@@ -698,6 +704,7 @@ public class DriverContext extends com.sun.faban.driver.DriverContext {
         timingInfo.respondTime = TIME_NOT_SET;
         timingInfo.lastRespondTime = TIME_NOT_SET;
         timingInfo.pauseTime = 0l;
+        timingInfo.responseInfoList.clear();
     }
 
     /**
@@ -717,7 +724,7 @@ public class DriverContext extends com.sun.faban.driver.DriverContext {
         /**
          * Respond Time.
          */
-        public long respondTime = TIME_NOT_SET;
+        public long respondTime1 = TIME_NOT_SET;
         /**
          * Last respond time, if any.
          */
@@ -729,37 +736,36 @@ public class DriverContext extends com.sun.faban.driver.DriverContext {
         /**
          * List of Response Information.
          */
-        public List<ResponseInfo> responseInfoList = null;
+        public List<ResponseInfo> responseInfoList = new ArrayList<>();
     }
 
     /**
-     * ResponseInfo is a value object that contains individual timing and url 
+     * ResponseInfo is a value object that contains individual timing and url
      * records for each operation.
+     *
      * @author: limp
      */
     public static class ResponseInfo {
 
-        /**
-         * Actual Invoke Time.
-         */
         public long startTime = TIME_NOT_SET;
-        /**
-         * Respond Time.
-         */
         public long endTime = TIME_NOT_SET;
-        /**
-         * URL of the response.
-         */
         public String responseURL;
+
+        public ResponseInfo() {
+        }
+
+        public ResponseInfo(long startTime, long endTime, String url) {
+            this.startTime = startTime;
+            this.endTime = endTime;
+            this.responseURL = url;
+        }
     }
+
     /**
      * Record the response information into list.
      */
-   public void recordResponseInfo(long startTime, long endTime, String url) {
-        ResponseInfo info = new ResponseInfo();
-        info.startTime = startTime;
-        info.endTime = endTime;
-        info.responseURL = url;
+    public void recordResponseInfo(long startTime, long endTime, String url) {
+        ResponseInfo info = new ResponseInfo(startTime, endTime, url);
         timingInfo.responseInfoList.add(info);
     }
 

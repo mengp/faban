@@ -386,12 +386,7 @@ public class HttpTransport {
     public StringBuilder fetchURL(String url) throws IOException {
         return delegate.fetchURL(url);
     }
-   /**
-     * @author: limp
-     */
-    public StringBuilder fetchURLWithJS(String url) throws IOException {
-        return delegate.fetchURLWithJS(url);
-    }
+
     /**
      * Retrieve large response from the URL and returns the data read. Use this
      * method for any arbitrary return data type e.g. file downloads. This method will only
